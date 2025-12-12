@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>NewStore Inspector</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; margin: 0; padding: 18px; background:#fafafa; color:#111;}
+    h1 { font-size:18px; margin: 0 0 8px; }
+    .meta { font-size:12px; color:#666; margin-bottom:12px; }
+    pre { background:#fff; border:1px solid #e6e6e6; padding:12px; border-radius:6px; overflow:auto; max-height:60vh; white-space:pre-wrap; word-break:break-word;}
+    .toolbar { margin-bottom:10px; display:flex; gap:8px; }
+    button { padding:6px 10px; font-size:13px; border-radius:6px; border:1px solid #ccc; background:#fff; cursor:pointer; }
+    small.note { display:block; margin-top:8px; color:#666; font-size:12px; }
+  </style>
+</head>
+<body>
+  <h1>Decoded Hash Content:</h1>
+  <div class="meta">This page decodes Base64 JSON that NewStore app appends to the URL hash.</div>
+  <div class="toolbar">
+    <button id="btnRefresh">Refresh</button>
+    <button id="btnCopy">Copy JSON</button>
+    <button id="btnClear">Clear</button>
+  </div>
+  <pre id="out">No data yet — open this page from the NewStore app (it will add the encoded hash).</pre>
+  <small class="note">Tip: you can also inspect <code>window.NEWSTORE_CONTEXT</code> in the console.</small>
+
+  <script>
+    function tryParseJson(s) {
+      try { return JSON.parse(s); } catch (e) { return null; }
+    }
+    function decodeHash(rawHash) {
+      if (!rawHash) return null;
+      const raw = rawHash.replace(/^#/, '');
+      try {
+        // 1) base64 -> JSON
+        const b = atob(raw);
+        let parsed = tryParseJson(b);
+        if (parsed) return parsed;
+        // 2) decodeURIComponent(base64decoded)
+        parsed = tryParseJson(decodeURIComponent(b));
+        if (parsed) return parsed;
+        // 3) raw might already be JSON
+        parsed = tryParseJson(raw);
+        if (parsed) return parsed;
+      } catch (err) {
+        // fallback: not base64 or decode error
+        console.warn('decodeHash error', err);
+      }
+      return null;
+    }
+
+    function render() {
+      const outEl = document.getElementById('out');
+      const parsed = decodeHash(window.location.hash);
+      if (!parsed) {
+        outEl.textContent = 'No decoded JSON found in the hash. Are you opening this from the NewStore app?';
+        return;
+      }
+      // expose for console
+      window.NEWSTORE_CONTEXT = parsed;
+      outEl.textContent = JSON.stringify(parsed, null, 2);
+    }
+
+    document.getElementById('btnRefresh').addEventListener('click', render);
+    document.getElementById('btnCopy').addEventListener('click', () => {
+      const txt = document.getElementById('out').textContent || '';
+      navigator.clipboard?.writeText(txt).then(()=> alert('Copied'), ()=> alert('Copy failed'));
+    });
+    document.getElementById('btnClear').addEventListener('click', () => {
+      document.getElementById('out').textContent = 'Cleared.';
+      window.NEWSTORE_CONTEXT = undefined;
+    });
+
+    // render on load
+    window.addEventListener('load', render, false);
+    // re-render if hash changes (e.g. navigation)
+    window.addEventListener('hashchange', render, false);
+  </script>
+</body>
+</html>
